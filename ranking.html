@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PokéCity — Ranking</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    body { font-family:'Rajdhani',sans-serif; background:#0a0a0f; }
+    .pixel { font-family:'Press Start 2P',monospace; }
+    .row {
+      background:linear-gradient(145deg,#12121f,#1a1a2e);
+      border:1px solid rgba(255,255,255,.06);
+      border-radius:16px;
+      transition:transform .2s;
+    }
+    .row:hover { transform:translateX(4px); }
+    .row.me { border-color:rgba(250,204,21,.3); background:linear-gradient(145deg,#1a1800,#1a1a2e); }
+  </style>
+</head>
+<body class="pb-24 min-h-screen">
+
+<header class="sticky top-0 z-50 border-b border-white/5 px-4 py-4" style="background:rgba(10,10,15,.95);backdrop-filter:blur(16px)">
+  <div class="max-w-lg mx-auto flex items-center justify-between">
+    <div>
+      <h1 class="pixel text-yellow-400 text-xs">Ranking</h1>
+      <p id="h-ciudad" class="text-white/40 text-xs mt-1"></p>
+    </div>
+    <p id="h-username" class="text-white font-bold text-sm"></p>
+  </div>
+</header>
+
+<main class="max-w-lg mx-auto px-4 pt-6 space-y-2" id="ranking-list">
+  <div class="text-center py-12 text-white/30 font-bold">Cargando...</div>
+</main>
+
+<nav class="fixed bottom-0 w-full border-t border-white/10 flex justify-around py-3 px-4 z-50" style="background:rgba(10,10,15,.98)">
+  <button onclick="window.location.href='mapa.html'"      class="flex flex-col items-center gap-1 text-white/40 text-xs font-bold"><span class="text-xl">🗺️</span>MAPA</button>
+  <button onclick="window.location.href='coleccion.html'" class="flex flex-col items-center gap-1 text-white/40 text-xs font-bold"><span class="text-xl">📦</span>COLECCIÓN</button>
+  <button class="flex flex-col items-center gap-1 text-yellow-400 text-xs font-bold"><span class="text-xl">🏆</span>RANKING</button>
+</nav>
+
+<script>
+const API      = 'https://marianoapi.onrender.com/game';
+const TOKEN    = localStorage.getItem('token');
+const USERNAME = localStorage.getItem('username');
+
+if (!TOKEN) window.location.href = 'index.html';
+
+document.getElementById('h-username').textContent = USERNAME;
+
+const medals    = ['🥇', '🥈', '🥉'];
+
+async function cargarRanking() {
+  try {
+    const res  = await fetch(`${API}/ranking/`, { headers: { Authorization: `Token ${TOKEN}` } });
+    if (res.status === 401) { localStorage.clear(); window.location.href = 'index.html'; return; }
+
+    const json = await res.json();
+    const data = json.ranking || json;
+
+    // Nombre de ciudad: viene del API o del localStorage
+    const ciudadNombre = json.ciudad
+      ? json.ciudad.nombre_display
+      : (localStorage.getItem('ciudad_nombre') || '');
+
+    if (ciudadNombre) {
+      document.getElementById('h-ciudad').textContent = '📍 ' + ciudadNombre;
+    }
+
+    const list = document.getElementById('ranking-list');
+
+    if (!data || !data.length) {
+      list.innerHTML = '<div class="text-center py-12 text-white/30 font-bold">Nadie en el ranking aún</div>';
+      return;
+    }
+
+    list.innerHTML = data.map(p => {
+      const isMe  = p.username === USERNAME;
+      const medal = medals[p.pos - 1] || '';
+      return `
+        <div class="row ${isMe ? 'me' : ''} px-4 py-3 flex items-center gap-3">
+          <div class="w-8 text-center">
+            ${medal
+              ? `<span class="text-xl">${medal}</span>`
+              : `<span class="text-white/30 font-black text-sm">${p.pos}</span>`
+            }
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="font-bold text-sm ${isMe ? 'text-yellow-400' : 'text-white'} truncate">
+              ${p.username} ${isMe ? '<span class="text-white/30 text-xs">← tú</span>' : ''}
+            </p>
+            <p class="text-white/40 text-xs">${p.capturas} capturas · Nv.${p.nivel}</p>
+          </div>
+          <div class="text-right shrink-0">
+            <p class="font-black text-yellow-400 text-base">${p.puntos}</p>
+            <p class="text-white/30 text-xs">pts</p>
+          </div>
+        </div>`;
+    }).join('');
+
+  } catch(e) {
+    document.getElementById('ranking-list').innerHTML =
+      '<div class="text-center py-12 text-red-400 font-bold">Error cargando ranking</div>';
+  }
+}
+
+cargarRanking();
+</script>
+</body>
+</html>

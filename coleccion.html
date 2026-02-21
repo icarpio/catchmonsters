@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PokéCity — Colección</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    body { font-family: 'Rajdhani', sans-serif; background:#0a0a0f; min-height:100vh; }
+    .pixel { font-family: 'Press Start 2P', monospace; }
+
+    .poke-card {
+      background:linear-gradient(145deg,#12121f,#1a1a2e);
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:20px;
+      transition:transform .25s ease, box-shadow .25s ease;
+      cursor:pointer; position:relative; overflow:hidden;
+    }
+    .poke-card::before {
+      content:''; position:absolute; inset:0;
+      background:radial-gradient(circle at 50% 0%,rgba(255,255,255,.04),transparent 70%);
+      pointer-events:none;
+    }
+    .poke-card:hover { transform:translateY(-5px) scale(1.02); }
+    .poke-card:hover.glow-grass    { box-shadow:0 16px 40px rgba(74,222,128,.25); }
+    .poke-card:hover.glow-fire     { box-shadow:0 16px 40px rgba(251,146,60,.25); }
+    .poke-card:hover.glow-water    { box-shadow:0 16px 40px rgba(96,165,250,.25); }
+    .poke-card:hover.glow-electric { box-shadow:0 16px 40px rgba(250,204,21,.25); }
+    .poke-card:hover.glow-poison   { box-shadow:0 16px 40px rgba(192,132,252,.25); }
+    .poke-card:hover.glow-psychic  { box-shadow:0 16px 40px rgba(244,114,182,.25); }
+    .poke-card:hover.glow-ghost    { box-shadow:0 16px 40px rgba(124,58,237,.25); }
+    .poke-card:hover.glow-dragon   { box-shadow:0 16px 40px rgba(129,140,248,.25); }
+    .poke-card:hover.glow-normal   { box-shadow:0 16px 40px rgba(148,163,184,.2); }
+    .poke-card:hover.glow-ice      { box-shadow:0 16px 40px rgba(165,243,252,.25); }
+    .poke-card:hover.glow-bug      { box-shadow:0 16px 40px rgba(132,204,22,.25); }
+
+    .locked-card { filter:brightness(.2) grayscale(1); }
+    .lock-overlay {
+      position:absolute; inset:0; border-radius:20px;
+      display:flex; align-items:center; justify-content:center;
+      background:rgba(0,0,0,.4);
+    }
+
+    .tipo-grass    { background:rgba(74,222,128,.15);  color:#4ade80;  border:1px solid #4ade8044; }
+    .tipo-poison   { background:rgba(192,132,252,.15); color:#c084fc;  border:1px solid #c084fc44; }
+    .tipo-fire     { background:rgba(251,146,60,.15);  color:#fb923c;  border:1px solid #fb923c44; }
+    .tipo-water    { background:rgba(96,165,250,.15);  color:#60a5fa;  border:1px solid #60a5fa44; }
+    .tipo-electric { background:rgba(250,204,21,.15);  color:#facc15;  border:1px solid #facc1544; }
+    .tipo-psychic  { background:rgba(244,114,182,.15); color:#f472b6;  border:1px solid #f472b644; }
+    .tipo-ice      { background:rgba(165,243,252,.15); color:#a5f3fc;  border:1px solid #a5f3fc44; }
+    .tipo-dragon   { background:rgba(129,140,248,.15); color:#818cf8;  border:1px solid #818cf844; }
+    .tipo-normal   { background:rgba(148,163,184,.15); color:#94a3b8;  border:1px solid #94a3b844; }
+    .tipo-fighting { background:rgba(239,68,68,.15);   color:#ef4444;  border:1px solid #ef444444; }
+    .tipo-bug      { background:rgba(132,204,22,.15);  color:#84cc16;  border:1px solid #84cc1644; }
+    .tipo-ghost    { background:rgba(124,58,237,.15);  color:#a78bfa;  border:1px solid #a78bfa44; }
+    .tipo-dark     { background:rgba(55,65,81,.4);     color:#9ca3af;  border:1px solid #6b728044; }
+    .tipo-steel    { background:rgba(156,163,175,.15); color:#9ca3af;  border:1px solid #9ca3af44; }
+    .tipo-ground   { background:rgba(146,64,14,.15);   color:#b45309;  border:1px solid #b4530944; }
+    .tipo-flying   { background:rgba(186,230,253,.15); color:#7dd3fc;  border:1px solid #7dd3fc44; }
+    .tipo-fairy    { background:rgba(251,207,232,.15); color:#f9a8d4;  border:1px solid #f9a8d444; }
+
+    .stat-bar { height:5px; border-radius:99px; background:#1e1e2e; overflow:hidden; }
+    .stat-fill { height:100%; border-radius:99px; transition:width .8s cubic-bezier(.4,0,.2,1); }
+
+    .shiny-badge {
+      background:linear-gradient(135deg,#fde68a,#fbbf24,#f59e0b,#fde68a);
+      background-size:200%; animation:shimmer 2s linear infinite;
+    }
+    @keyframes shimmer { 0%,100%{background-position:0%} 50%{background-position:100%} }
+
+    #modal {
+      position:fixed; inset:0; z-index:200;
+      background:rgba(0,0,0,.8); backdrop-filter:blur(8px);
+      display:flex; align-items:center; justify-content:center; padding:16px;
+    }
+    #modal.hidden { display:none; }
+    #modal-card {
+      background:linear-gradient(145deg,#12121f,#1a1a2e);
+      border:1px solid rgba(255,255,255,.1);
+      border-radius:24px; width:100%; max-width:340px;
+      padding:24px; position:relative; max-height:90vh; overflow-y:auto;
+    }
+
+    .filter-btn { transition:all .2s; }
+    .filter-btn.active {
+      background:rgba(250,204,21,.15);
+      border-color:rgba(250,204,21,.4);
+      color:#facc15;
+    }
+
+    .progress-bar { height:6px; border-radius:99px; background:#1e1e2e; overflow:hidden; }
+    .progress-fill {
+      height:100%;
+      background:linear-gradient(90deg,#facc15,#f59e0b);
+      border-radius:99px;
+      transition:width 1s ease;
+    }
+  </style>
+</head>
+<body class="pb-24">
+
+<header class="sticky top-0 z-50 border-b border-white/5" style="background:rgba(10,10,15,.95);backdrop-filter:blur(16px)">
+  <div class="max-w-2xl mx-auto px-4 py-4">
+    <div class="flex items-center justify-between mb-3">
+      <div>
+        <h1 class="pixel text-yellow-400 text-xs leading-relaxed">Colección</h1>
+        <p id="subtitle" class="text-white/40 text-xs mt-1 font-semibold">Cargando...</p>
+      </div>
+      <div class="text-right">
+        <p id="h-username" class="text-white font-bold text-sm"></p>
+        <p id="h-puntos"   class="text-yellow-400 text-xs">⭐ 0 pts</p>
+      </div>
+    </div>
+    <div class="progress-bar">
+      <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+    </div>
+  </div>
+</header>
+
+<div class="max-w-2xl mx-auto px-4 pt-4 pb-2 flex gap-2 flex-wrap">
+  <button class="filter-btn active border border-white/10 rounded-full px-4 py-1.5 text-sm font-bold text-white/60" onclick="setFilter('all')"      data-f="all">Todos</button>
+  <button class="filter-btn border border-white/10 rounded-full px-4 py-1.5 text-sm font-bold text-white/60"        onclick="setFilter('capturados')" data-f="capturados">✅ Capturados</button>
+  <button class="filter-btn border border-white/10 rounded-full px-4 py-1.5 text-sm font-bold text-white/60"        onclick="setFilter('pendientes')" data-f="pendientes">🔒 Por capturar</button>
+  <button class="filter-btn border border-white/10 rounded-full px-4 py-1.5 text-sm font-bold text-white/60"        onclick="setFilter('shiny')"      data-f="shiny">✨ Shiny</button>
+</div>
+
+<main class="max-w-2xl mx-auto px-4 py-4">
+  <div id="grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"></div>
+  <div id="empty" class="hidden text-center py-16">
+    <p class="text-6xl mb-4">📦</p>
+    <p class="text-white/40 font-bold">Nada por aquí</p>
+    <p class="text-white/20 text-sm mt-1">Ve al mapa a capturar pokémons</p>
+  </div>
+</main>
+
+<div id="modal" class="hidden" onclick="closeModal(event)">
+  <div id="modal-card">
+    <button onclick="closeModal()" class="absolute top-4 right-4 text-white/30 hover:text-white text-xl">✕</button>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<nav class="fixed bottom-0 left-0 right:0 w-full border-t border-white/10 flex justify-around py-3 px-4 z-50" style="background:rgba(10,10,15,.98)">
+  <button onclick="window.location.href='mapa.html'" class="flex flex-col items-center gap-1 text-white/40 text-xs font-bold">
+    <span class="text-xl">🗺️</span> MAPA
+  </button>
+  <button class="flex flex-col items-center gap-1 text-yellow-400 text-xs font-bold">
+    <span class="text-xl">📦</span> COLECCIÓN
+  </button>
+  <button onclick="window.location.href='ranking.html'" class="flex flex-col items-center gap-1 text-white/40 text-xs font-bold">
+    <span class="text-xl">🏆</span> RANKING
+  </button>
+</nav>
+
+<script>
+const API      = 'https://marianoapi.onrender.com/game';
+const TOKEN    = localStorage.getItem('token');
+const USERNAME = localStorage.getItem('username');
+if (!TOKEN) window.location.href = 'index.html';
+
+document.getElementById('h-username').textContent = USERNAME;
+
+const STAT_COLORS  = { hp:'#f87171', attack:'#fb923c', defense:'#60a5fa', 'special-attack':'#c084fc', 'special-defense':'#34d399', speed:'#facc15' };
+const STAT_LABELS  = { hp:'HP', attack:'ATK', defense:'DEF', 'special-attack':'SpA', 'special-defense':'SpD', speed:'SPD' };
+
+let allLocations = [];  
+let miColeccion  = [];  
+let capturedIds  = new Set();
+let currentFilter = 'all';
+
+async function cargarTodo() {
+  const headers = { Authorization: `Token ${TOKEN}` };
+  const ciudad  = localStorage.getItem('ciudad_nombre') || 'Tu ciudad';
+
+  const [resUbic, resCol, resPerfil] = await Promise.all([
+    fetch(`${API}/ubicaciones/`, { headers }),
+    fetch(`${API}/coleccion/`, { headers }),
+    fetch(`${API}/perfil/`, { headers }),
+  ]);
+
+  if (resUbic.status === 401) { localStorage.clear(); window.location.href='index.html'; return; }
+
+  const ubicData = await resUbic.json();
+  const colData  = await resCol.json();
+  const perfil   = await resPerfil.json();
+
+  // FORZAR arrays
+  allLocations = Array.isArray(ubicData.ubicaciones) ? ubicData.ubicaciones : (Array.isArray(ubicData) ? ubicData : []);
+  miColeccion  = Array.isArray(colData) ? colData : [];
+
+  // Filtrar ids válidos
+  allLocations = allLocations.filter(l => l && l.id != null);
+  miColeccion  = miColeccion.filter(c => c && c.location != null);
+
+  capturedIds = new Set(miColeccion.map(c => c.location));
+
+  document.getElementById('h-puntos').textContent = `⭐ ${perfil.puntos} pts · Nv.${perfil.nivel}`;
+  document.getElementById('subtitle').textContent =
+    `${miColeccion.length} de ${allLocations.length} capturados · ${ciudad}`;
+
+  const pct = allLocations.length ? Math.round(miColeccion.length / allLocations.length * 100) : 0;
+  document.getElementById('progress-fill').style.width = pct + '%';
+
+  renderGrid();
+}
+function renderGrid() {
+  const grid = document.getElementById('grid');
+  const empty = document.getElementById('empty');
+
+  let items = allLocations;
+
+  if (currentFilter === 'capturados') items = items.filter(l => capturedIds.has(l.id));
+  if (currentFilter === 'pendientes') items = items.filter(l => !capturedIds.has(l.id));
+  if (currentFilter === 'shiny')      items = items.filter(l => l.pokemon.is_shiny);
+
+  if (items.length === 0) {
+    grid.innerHTML = '';
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+
+  grid.innerHTML = items.map(loc => buildCard(loc)).join('');
+}
+
+function buildCard(loc) {
+  const p        = loc.pokemon;
+  const captured = capturedIds.has(loc.id);
+  const img = (p.is_shiny && p.imagen_shiny) ? p.imagen_shiny : p.imagen;
+  const tipo1    = p.tipos[0] || 'normal';
+  const glow     = `glow-${tipo1}`;
+  const tipos    = p.tipos.map(t =>
+    `<span class="tipo-${t} text-xs font-bold px-2 py-0.5 rounded-full capitalize">${t}</span>`
+  ).join('');
+
+  return `
+    <div class="poke-card ${glow}" onclick="openModal(${loc.id})">
+      <!-- Overlay candado si NO está capturado -->
+      ${!captured ? '<div class="lock-overlay"><span class="text-4xl">🔒</span></div>' : ''}
+      
+      <div class="p-3 pt-4">
+        <div class="flex justify-between items-start mb-1">
+          <span class="text-white/20 font-mono text-xs">#${String(p.pokedex_id).padStart(3,'0')}</span>
+          <span>${p.is_shiny ? '<span class="shiny-badge text-black text-xs font-black px-2 py-0.5 rounded-full">✨</span>' : ''}</span>
+        </div>
+        <div class="flex justify-center h-20 items-center py-1">
+          <img src="${img}" alt="${p.nombre}" 
+               class="h-16 w-16 object-contain drop-shadow-lg transition-transform duration-300 hover:scale-110 ${!captured ? 'opacity-40 grayscale' : ''}"/>
+        </div>
+        <p class="text-center text-white font-bold capitalize text-sm mt-1">${p.nombre}</p>
+        <div class="flex gap-1 justify-center mt-2 flex-wrap">${tipos}</div>
+      </div>
+    </div>`;
+}
+// ─── Abrir modal ─────────────────────────────────────────────
+function openModal(locationId) {
+  const loc      = allLocations.find(l => l.id === locationId);
+  if (!loc) return;
+  const p        = loc.pokemon;
+  const captured = capturedIds.has(loc.id);
+  const img = (p.is_shiny && p.imagen_shiny) ? p.imagen_shiny : p.imagen;
+
+  const tipos = p.tipos.map(t =>
+    `<span class="tipo-${t} text-xs font-bold px-2 py-0.5 rounded-full capitalize">${t}</span>`
+  ).join('');
+
+  const stats = Object.entries(p.stats || {}).map(([k,v]) => {
+    const pct   = Math.min(100, Math.round(v/255*100));
+    const color = STAT_COLORS[k] || '#94a3b8';
+    return `
+      <div class="flex items-center gap-2">
+        <span class="text-white/40 text-xs font-bold w-8 shrink-0">${STAT_LABELS[k]}</span>
+        <span class="text-white text-xs font-bold w-6 text-right">${v}</span>
+        <div class="stat-bar flex-1"><div class="stat-fill" style="width:${pct}%;background:${color}"></div></div>
+      </div>`;
+  }).join('');
+
+  const habs = (p.habilidades || []).map(h =>
+    `<span class="bg-white/5 border border-white/10 text-white/60 text-xs px-2 py-1 rounded-lg capitalize">${h}</span>`
+  ).join('');
+
+  const rareza_colors = { comun:'text-white/40', raro:'text-blue-400', epico:'text-purple-400', legendario:'text-yellow-400' };
+
+  // Datos de captura si existe
+  const captura = miColeccion.find(c => c.location === locationId);
+  const capturadoInfo = captura
+    ? `<div class="bg-green-500/10 border border-green-500/20 rounded-xl p-3 mb-4 text-left">
+         <p class="text-green-400 text-xs font-bold">✅ Capturado</p>
+         <p class="text-white/30 text-xs mt-0.5">${new Date(captura.capturado_en).toLocaleString('es-ES')}</p>
+       </div>`
+    : `<div class="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 mb-4">
+         <p class="text-yellow-400 text-xs font-bold">📍 ${loc.descripcion || 'Búscalo en la ciudad'}</p>
+       </div>`;
+
+  document.getElementById('modal-body').innerHTML = `
+    <div class="text-center mb-4">
+      ${p.is_shiny ? '<div class="shiny-badge inline-block text-black text-xs font-black px-3 py-1 rounded-full mb-2">✨ SHINY</div>' : ''}
+      <p class="text-white/20 font-mono text-xs">#${String(p.pokedex_id).padStart(3,'0')}</p>
+      <img src="${img}" class="w-28 h-28 object-contain mx-auto my-2 drop-shadow-2xl"/>
+      <h2 class="text-2xl font-black text-white capitalize tracking-widest">${p.nombre}</h2>
+      <p class="${rareza_colors[p.rareza] || 'text-white/40'} text-xs font-bold uppercase tracking-widest mt-1">${p.rareza}</p>
+      <div class="flex gap-1 justify-center mt-2">${tipos}</div>
+    </div>
+    ${capturadoInfo}
+    ${captured ? `<div class="space-y-2 mb-4">${stats}</div>
+    <div class="mb-4">
+      <p class="text-white/30 text-xs font-bold mb-2 uppercase tracking-widest">Habilidades</p>
+      <div class="flex gap-2 flex-wrap">${habs}</div>
+    </div>
+    <div class="bg-white/5 border border-white/10 rounded-xl p-3">
+      <p class="text-white/40 text-xs font-bold uppercase tracking-widest mb-1">Total Stats</p>
+      <p class="text-white font-black text-xl">${p.total_stats}</p>
+    </div>` : ''}`;
+
+  document.getElementById('modal').classList.remove('hidden');
+}
+
+function closeModal(e) {
+  if (e && e.target !== document.getElementById('modal')) return;
+  document.getElementById('modal').classList.add('hidden');
+}
+
+function setFilter(f) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.dataset.f === f));
+  renderGrid();
+}
+
+cargarTodo();
+</script>
+</body>
+</html>

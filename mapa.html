@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PokéCity — Mapa</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    * { box-sizing:border-box; }
+    body { font-family:'Rajdhani',sans-serif; background:#0a0a0f; margin:0; overflow:hidden; }
+    .pixel { font-family:'Press Start 2P',monospace; }
+    #map { position:fixed; inset:0; z-index:0; }
+    .leaflet-tile { filter:brightness(.85) saturate(.6) hue-rotate(195deg); }
+
+    #header {
+      position:fixed; top:0; left:0; right:0; z-index:100;
+      background:rgba(10,10,15,.92); backdrop-filter:blur(16px);
+      border-bottom:1px solid rgba(255,255,255,.08);
+    }
+    #panel {
+      position:fixed; bottom:0; left:0; right:0; z-index:100;
+      background:linear-gradient(0deg,rgba(10,10,15,.98) 80%,transparent);
+      padding:12px 16px 20px;
+    }
+
+    /* ── Marcadores ──────────────────────────────────────────────────────── */
+    .poke-marker {
+      width:52px; height:52px; border-radius:50%;
+      border:3px solid #facc15;
+      background:rgba(10,10,15,.88);
+      display:flex; align-items:center; justify-content:center;
+      box-shadow:0 4px 20px rgba(250,204,21,.35);
+      transition:transform .2s, box-shadow .2s;
+      cursor:pointer;
+    }
+    .poke-marker:hover { transform:scale(1.18); }
+    .poke-marker img { width:36px; height:36px; object-fit:contain; }
+
+    /* Ya capturado POR MÍ — verde, semi-opaco, check encima */
+    .poke-marker.capturado {
+      border-color:#22c55e;
+      box-shadow:0 4px 16px rgba(34,197,94,.25);
+      opacity:.65;
+    }
+    .poke-marker.capturado::after {
+      content:'✓';
+      position:absolute; top:-6px; right:-6px;
+      width:18px; height:18px; border-radius:50%;
+      background:#22c55e; color:#fff;
+      font-size:10px; font-weight:900;
+      display:flex; align-items:center; justify-content:center;
+    }
+    /* Shiny — borde dorado parpadeante */
+    .poke-marker.shiny {
+      border-color:#fbbf24;
+      animation:shiny-pulse 2s ease-in-out infinite;
+    }
+    @keyframes shiny-pulse {
+      0%,100% { box-shadow:0 4px 20px rgba(251,191,36,.4); }
+      50%      { box-shadow:0 4px 30px rgba(251,191,36,.8); }
+    }
+    /* En rango — pulso verde */
+    .poke-marker.en-rango {
+      animation:rango-pulse 1s ease-in-out infinite;
+    }
+    @keyframes rango-pulse {
+      0%,100% { box-shadow:0 0 0 0 rgba(250,204,21,.6); }
+      50%      { box-shadow:0 0 0 14px rgba(250,204,21,0); }
+    }
+
+    /* Marcador usuario */
+    .user-dot {
+      width:18px; height:18px; border-radius:50%;
+      background:#60a5fa; border:3px solid #fff;
+      animation:user-pulse 2s ease-in-out infinite;
+    }
+    @keyframes user-pulse {
+      0%,100% { box-shadow:0 0 0 4px rgba(96,165,250,.3); }
+      50%      { box-shadow:0 0 0 14px rgba(96,165,250,0); }
+    }
+
+    /* ── Panel pokémon seleccionado ─────────────────────────────────────── */
+    #poke-preview {
+      background:rgba(255,255,255,.05);
+      border:1px solid rgba(255,255,255,.1);
+      border-radius:18px; padding:12px; margin-bottom:10px;
+    }
+    #poke-preview.capturado { border-color:rgba(34,197,94,.3); background:rgba(34,197,94,.05); }
+    #poke-preview.en-rango  { border-color:rgba(250,204,21,.4); background:rgba(250,204,21,.05); }
+
+    /* ── Botón capturar ─────────────────────────────────────────────────── */
+    #btn-capturar {
+      background:linear-gradient(135deg,#facc15,#f59e0b);
+      color:#0a0a0f; font-weight:900; letter-spacing:.08em;
+      animation:btn-pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes btn-pulse {
+      0%,100% { box-shadow:0 0 0 0 rgba(250,204,21,.5); }
+      50%      { box-shadow:0 0 0 14px rgba(250,204,21,0); }
+    }
+    #btn-capturar:disabled { opacity:.45; animation:none; cursor:not-allowed; }
+
+    /* ── Tipos ──────────────────────────────────────────────────────────── */
+    .tipo-grass    { background:rgba(74,222,128,.15);  color:#4ade80;  border:1px solid #4ade8044; }
+    .tipo-poison   { background:rgba(192,132,252,.15); color:#c084fc;  border:1px solid #c084fc44; }
+    .tipo-fire     { background:rgba(251,146,60,.15);  color:#fb923c;  border:1px solid #fb923c44; }
+    .tipo-water    { background:rgba(96,165,250,.15);  color:#60a5fa;  border:1px solid #60a5fa44; }
+    .tipo-electric { background:rgba(250,204,21,.15);  color:#facc15;  border:1px solid #facc1544; }
+    .tipo-psychic  { background:rgba(244,114,182,.15); color:#f472b6;  border:1px solid #f472b644; }
+    .tipo-ice      { background:rgba(165,243,252,.15); color:#a5f3fc;  border:1px solid #a5f3fc44; }
+    .tipo-dragon   { background:rgba(129,140,248,.15); color:#818cf8;  border:1px solid #818cf844; }
+    .tipo-normal   { background:rgba(148,163,184,.15); color:#94a3b8;  border:1px solid #94a3b844; }
+    .tipo-fighting { background:rgba(239,68,68,.15);   color:#ef4444;  border:1px solid #ef444444; }
+    .tipo-bug      { background:rgba(132,204,22,.15);  color:#84cc16;  border:1px solid #84cc1644; }
+    .tipo-ghost    { background:rgba(124,58,237,.15);  color:#a78bfa;  border:1px solid #a78bfa44; }
+    .tipo-rock     { background:rgba(217,119,6,.15);   color:#d97706;  border:1px solid #d9770644; }
+    .tipo-dark     { background:rgba(55,65,81,.4);     color:#9ca3af;  border:1px solid #6b728044; }
+    .tipo-steel    { background:rgba(156,163,175,.15); color:#9ca3af;  border:1px solid #9ca3af44; }
+    .tipo-ground   { background:rgba(146,64,14,.15);   color:#b45309;  border:1px solid #b4530944; }
+    .tipo-flying   { background:rgba(186,230,253,.15); color:#7dd3fc;  border:1px solid #7dd3fc44; }
+    .tipo-fairy    { background:rgba(251,207,232,.15); color:#f9a8d4;  border:1px solid #f9a8d444; }
+
+    /* ── Stats bars ─────────────────────────────────────────────────────── */
+    .stat-bar  { height:5px; border-radius:99px; background:#1e1e2e; overflow:hidden; }
+    .stat-fill { height:100%; border-radius:99px; }
+
+    /* ── Shiny badge ────────────────────────────────────────────────────── */
+    .shiny-badge {
+      background:linear-gradient(135deg,#fde68a,#fbbf24,#f59e0b,#fde68a);
+      background-size:200%; animation:shimmer 2s linear infinite;
+    }
+    @keyframes shimmer { 0%,100%{background-position:0%} 50%{background-position:100%} }
+
+    /* ── Toast ──────────────────────────────────────────────────────────── */
+    #toast {
+      position:fixed; top:74px; left:50%; transform:translateX(-50%);
+      z-index:200; min-width:260px; max-width:90vw;
+      padding:10px 18px; border-radius:14px;
+      font-weight:700; font-size:13px; text-align:center;
+      transition:opacity .3s, transform .3s;
+    }
+    #toast.success { background:rgba(34,197,94,.15);  border:1px solid rgba(34,197,94,.4);  color:#4ade80; }
+    #toast.error   { background:rgba(239,68,68,.15);  border:1px solid rgba(239,68,68,.4);  color:#f87171; }
+    #toast.info    { background:rgba(96,165,250,.15); border:1px solid rgba(96,165,250,.4); color:#93c5fd; }
+    #toast.hidden  { opacity:0; pointer-events:none; transform:translateX(-50%) translateY(-8px); }
+
+    /* ── Modal ──────────────────────────────────────────────────────────── */
+    #modal {
+      position:fixed; inset:0; z-index:300;
+      background:rgba(0,0,0,.82); backdrop-filter:blur(10px);
+      display:flex; align-items:center; justify-content:center; padding:16px;
+    }
+    #modal.hidden { display:none; }
+    #modal-card {
+      background:linear-gradient(145deg,#12121f,#1a1a2e);
+      border:1px solid rgba(255,255,255,.1); border-radius:24px;
+      width:100%; max-width:340px; padding:24px;
+      text-align:center; position:relative; max-height:90vh; overflow-y:auto;
+    }
+
+    /* ── Nav ────────────────────────────────────────────────────────────── */
+    .nav-btn { transition:color .2s; }
+    .nav-btn.active { color:#facc15; }
+
+    /* POI badge */
+    .poi-badge {
+      background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1);
+      border-radius:8px; padding:4px 10px;
+      color:rgba(255,255,255,.5); font-size:11px; font-weight:700;
+    }
+  </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<!-- Header -->
+<div id="header" class="px-4 py-3">
+  <div class="flex items-center justify-between max-w-lg mx-auto">
+    <div>
+      <span class="pixel text-yellow-400 text-xs">PokéCity</span>
+      <p class="text-white/40 text-xs mt-0.5" id="ciudad-label">—</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <div class="text-right">
+        <p class="text-white text-sm font-bold" id="header-username">—</p>
+        <p class="text-yellow-400 text-xs" id="header-puntos">⭐ 0 pts</p>
+      </div>
+      <!-- Progreso en header -->
+      <div class="text-right hidden sm:block">
+        <p class="text-white/30 text-xs" id="header-progreso">0/0</p>
+        <p class="text-white/20 text-xs">capturados</p>
+      </div>
+      <button onclick="doLogout()" class="text-white/30 hover:text-white text-xs font-bold px-2">SALIR</button>
+    </div>
+  </div>
+</div>
+
+<!-- Panel inferior -->
+<div id="panel" class="max-w-lg mx-auto">
+
+  <!-- Preview pokémon seleccionado -->
+  <div id="poke-preview" class="hidden mb-2">
+    <div class="flex items-center gap-3">
+      <div class="relative">
+        <img id="preview-img" src="" class="w-14 h-14 object-contain drop-shadow-lg"/>
+        <div id="preview-capturado-badge" class="hidden absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center text-white text-xs font-bold">✓</div>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 mb-0.5">
+          <p id="preview-name" class="text-white font-bold capitalize text-sm truncate"></p>
+          <span id="preview-shiny" class="hidden shiny-badge text-black text-xs font-black px-1.5 py-0.5 rounded-full">✨</span>
+        </div>
+        <p id="preview-lugar" class="text-white/40 text-xs truncate mb-1"></p>
+        <div id="preview-tipos" class="flex gap-1 flex-wrap"></div>
+      </div>
+      <div class="text-right shrink-0">
+        <p id="preview-dist" class="text-white/50 text-xs font-bold"></p>
+        <p id="preview-rareza" class="text-xs font-bold mt-0.5"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Botón capturar -->
+  <button id="btn-capturar" class="hidden w-full py-3.5 rounded-2xl text-sm tracking-widest font-black mb-2" onclick="capturar()" disabled>
+    CAPTURAR
+  </button>
+
+  <!-- Estado sin selección -->
+  <div id="no-selection" class="text-center py-1">
+    <p class="text-white/30 text-sm font-semibold">Pulsa un Pokémon en el mapa</p>
+    <p class="text-white/20 text-xs mt-0.5" id="gps-status">Obteniendo GPS...</p>
+  </div>
+
+  <!-- Nav -->
+  <div class="flex justify-around mt-3 border-t border-white/10 pt-3">
+    <button class="nav-btn active flex flex-col items-center gap-0.5 text-xs font-bold text-yellow-400">
+      <span class="text-lg">🗺️</span>MAPA
+    </button>
+    <button class="nav-btn flex flex-col items-center gap-0.5 text-xs font-bold text-white/40" onclick="window.location.href='coleccion.html'">
+      <span class="text-lg">📦</span>COLECCIÓN
+    </button>
+    <button class="nav-btn flex flex-col items-center gap-0.5 text-xs font-bold text-white/40" onclick="window.location.href='ranking.html'">
+      <span class="text-lg">🏆</span>RANKING
+    </button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="hidden"></div>
+
+<!-- Modal captura exitosa -->
+<div id="modal" class="hidden" onclick="closeModal(event)">
+  <div id="modal-card">
+    <button onclick="closeModal()" class="absolute top-4 right-4 text-white/30 hover:text-white text-xl leading-none">✕</button>
+    <div id="modal-content"></div>
+  </div>
+</div>
+
+<script>
+const API          = 'https://marianoapi.onrender.com/game';
+const TOKEN        = localStorage.getItem('token');
+const USERNAME     = localStorage.getItem('username');
+const CIUDAD_NOMBRE= localStorage.getItem('ciudad_nombre') || 'Tu ciudad';
+const CIUDAD_LAT   = parseFloat(localStorage.getItem('ciudad_lat')  || '40.4168');
+const CIUDAD_LON   = parseFloat(localStorage.getItem('ciudad_lon')  || '-3.7038');
+const CIUDAD_ZOOM  = parseInt(localStorage.getItem('ciudad_zoom')   || '15');
+
+if (!TOKEN) window.location.href = 'index.html';
+
+const STAT_COLORS = {
+  hp:'#f87171', attack:'#fb923c', defense:'#60a5fa',
+  'special-attack':'#c084fc', 'special-defense':'#34d399', speed:'#facc15'
+};
+const STAT_LABELS = {
+  hp:'HP', attack:'ATK', defense:'DEF',
+  'special-attack':'SpA', 'special-defense':'SpD', speed:'SPD'
+};
+const POI_EMOJI = {
+  monumento:'🏛️', plaza:'⛲', parque:'🌳', museo:'🏛️',
+  teatro:'🎭', iglesia:'⛪', biblioteca:'📚', mercado:'🛒',
+  fuente:'⛲', farmacia:'💊', otro:'📍'
+};
+const RAREZA_COLOR = {
+  comun:'text-white/40', raro:'text-blue-400', epico:'text-purple-400', legendario:'text-yellow-400'
+};
+
+// ── Estado ───────────────────────────────────────────────────────────────────
+let map, userMarker, userLat, userLon;
+let locations      = [];
+let selectedLoc    = null;
+let markers        = {};
+let totalCiudad    = 0;
+let totalCapturado = 0;
+
+// ── Init UI ──────────────────────────────────────────────────────────────────
+document.getElementById('header-username').textContent = USERNAME;
+document.getElementById('ciudad-label').textContent    = CIUDAD_NOMBRE;
+
+// ── Init mapa ─────────────────────────────────────────────────────────────────
+map = L.map('map', { zoomControl:false }).setView([CIUDAD_LAT, CIUDAD_LON], CIUDAD_ZOOM);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution:'© OpenStreetMap', maxZoom:19
+}).addTo(map);
+L.control.zoom({ position:'topright' }).addTo(map);
+
+// Click en el mapa vacío → deseleccionar
+map.on('click', deseleccionar);
+
+// ── GPS ───────────────────────────────────────────────────────────────────────
+function startGPS() {
+  if (!navigator.geolocation) {
+    setGPSStatus('GPS no disponible');
+    cargarUbicaciones();
+    return;
+  }
+  navigator.geolocation.watchPosition(onPosition, onGPSError, {
+    enableHighAccuracy:true, maximumAge:5000
+  });
+}
+
+function onPosition(pos) {
+  userLat = pos.coords.latitude;
+  userLon = pos.coords.longitude;
+  setGPSStatus(`GPS ✓ · ±${Math.round(pos.coords.accuracy)}m`);
+
+  if (!userMarker) {
+    const icon = L.divIcon({ className:'', html:'<div class="user-dot"></div>', iconSize:[18,18] });
+    userMarker = L.marker([userLat, userLon], { icon, zIndexOffset:1000 }).addTo(map);
+    map.setView([userLat, userLon], CIUDAD_ZOOM);
+    cargarUbicaciones();
+  } else {
+    userMarker.setLatLng([userLat, userLon]);
+  }
+  actualizarProximidad();
+}
+
+function onGPSError() {
+  setGPSStatus('Sin GPS — actívalo para capturar');
+  if (locations.length === 0) cargarUbicaciones();
+}
+
+function setGPSStatus(msg) {
+  document.getElementById('gps-status').textContent = msg;
+}
+
+// ── Cargar ubicaciones ────────────────────────────────────────────────────────
+async function cargarUbicaciones() {
+  try {
+    const params = new URLSearchParams();
+    if (userLat) { params.set('lat', userLat); params.set('lon', userLon); }
+
+    const res  = await fetch(`${API}/ubicaciones/?${params}`, {
+      headers:{ Authorization:`Token ${TOKEN}` }
+    });
+    if (res.status === 401) { doLogout(); return; }
+
+    const json  = await res.json();
+    locations   = json.ubicaciones || [];
+    totalCiudad    = json.total     || locations.length;
+    totalCapturado = json.capturados || 0;
+
+    actualizarHeaderProgreso();
+    renderMarkers();
+    if (selectedLoc) {
+      // Actualizar el estado del seleccionado (puede que lo hayamos capturado)
+      const updated = locations.find(l => l.id === selectedLoc.id);
+      if (updated) { selectedLoc = updated; actualizarProximidad(); }
+    }
+  } catch(e) {
+    showToast('Error conectando con el servidor', 'error');
+  }
+}
+
+function actualizarHeaderProgreso() {
+  document.getElementById('header-progreso').textContent = `${totalCapturado}/${totalCiudad}`;
+}
+
+// ── Marcadores ────────────────────────────────────────────────────────────────
+function renderMarkers() {
+  Object.values(markers).forEach(m => m.remove());
+  markers = {};
+
+  locations.forEach(loc => {
+    const p      = loc.pokemon;
+    const img    = p.imagen;
+    const clases = [
+      loc.ya_capturado ? 'capturado' : '',
+      p.is_shiny        ? 'shiny'     : '',
+    ].filter(Boolean).join(' ');
+
+    const html = `
+      <div class="poke-marker ${clases}" style="position:relative">
+        <img src="${img}" alt="${p.nombre}" style="width:36px;height:36px;object-fit:contain"/>
+        ${loc.ya_capturado ? '<div style="position:absolute;top:-5px;right:-5px;width:16px;height:16px;border-radius:50%;background:#22c55e;color:#fff;font-size:9px;font-weight:900;display:flex;align-items:center;justify-content:center">✓</div>' : ''}
+      </div>`;
+
+    const icon   = L.divIcon({ className:'', html, iconSize:[52,52], iconAnchor:[26,26] });
+    const marker = L.marker([loc.lat, loc.lon], { icon, zIndexOffset: loc.ya_capturado ? 0 : 10 }).addTo(map);
+
+    marker.on('click', (e) => { L.DomEvent.stopPropagation(e); seleccionar(loc); });
+    markers[loc.id] = marker;
+  });
+}
+
+// ── Selección ────────────────────────────────────────────────────────────────
+function seleccionar(loc) {
+  selectedLoc = loc;
+  const p   = loc.pokemon;
+
+  document.getElementById('poke-preview').classList.remove('hidden');
+  document.getElementById('no-selection').classList.add('hidden');
+  document.getElementById('btn-capturar').classList.remove('hidden');
+
+  document.getElementById('preview-img').src = p.imagen;
+  document.getElementById('preview-name').textContent = p.nombre;
+  document.getElementById('preview-lugar').textContent =
+    `${POI_EMOJI[loc.poi_tipo] || '📍'} ${loc.descripcion || loc.poi_tipo}`;
+
+  // Shiny badge
+  document.getElementById('preview-shiny').classList.toggle('hidden', !p.is_shiny);
+
+  // Capturado badge
+  document.getElementById('preview-capturado-badge').classList.toggle('hidden', !loc.ya_capturado);
+
+  // Tipos
+  document.getElementById('preview-tipos').innerHTML = p.tipos
+    .map(t => `<span class="tipo-${t} text-xs font-bold px-2 py-0.5 rounded-full capitalize">${t}</span>`)
+    .join('');
+
+  // Rareza
+  const rc = RAREZA_COLOR[p.rareza] || 'text-white/40';
+  document.getElementById('preview-rareza').className = `text-xs font-bold mt-0.5 capitalize ${rc}`;
+  document.getElementById('preview-rareza').textContent = p.rareza + (p.is_shiny ? ' ✨' : '');
+
+  // Borde del panel
+  const preview = document.getElementById('poke-preview');
+  preview.classList.remove('capturado', 'en-rango');
+  if (loc.ya_capturado) preview.classList.add('capturado');
+
+  actualizarProximidad();
+  map.panTo([loc.lat, loc.lon]);
+}
+
+function deseleccionar() {
+  selectedLoc = null;
+  document.getElementById('poke-preview').classList.add('hidden');
+  document.getElementById('btn-capturar').classList.add('hidden');
+  document.getElementById('no-selection').classList.remove('hidden');
+}
+
+// ── Proximidad ────────────────────────────────────────────────────────────────
+function actualizarProximidad() {
+  if (!selectedLoc) return;
+  const loc = selectedLoc;
+  const btn = document.getElementById('btn-capturar');
+  const distEl = document.getElementById('preview-dist');
+  const preview = document.getElementById('poke-preview');
+
+  if (loc.ya_capturado) {
+    btn.disabled = true;
+    btn.textContent = '✓ YA CAPTURADO';
+    btn.style.background = 'rgba(34,197,94,.2)';
+    btn.style.color = '#4ade80';
+    btn.style.animation = 'none';
+    distEl.textContent = 'Ya está en tu colección';
+    return;
+  }
+
+  // Resetear estilo botón
+  btn.style.background = '';
+  btn.style.color = '';
+  btn.style.animation = '';
+
+  if (!userLat) {
+    btn.disabled = true;
+    btn.textContent = 'ACTIVA EL GPS';
+    distEl.textContent = '';
+    return;
+  }
+
+  const dist  = haversine(userLat, userLon, parseFloat(loc.lat), parseFloat(loc.lon));
+  const radio = loc.radio_metros;
+  const enRango = dist <= radio;
+
+  distEl.textContent = enRango
+    ? `¡A ${Math.round(dist)}m! 🎯 En rango`
+    : `${Math.round(dist)}m de distancia (radio ${radio}m)`;
+
+  btn.disabled    = !enRango;
+  btn.textContent = enRango ? '¡CAPTURAR! 🎯' : `Acércate ${Math.round(dist - radio)}m más`;
+
+  preview.classList.toggle('en-rango', enRango);
+}
+
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6_371_000;
+  const p1 = lat1*Math.PI/180, p2 = lat2*Math.PI/180;
+  const dp = (lat2-lat1)*Math.PI/180, dl = (lon2-lon1)*Math.PI/180;
+  const a  = Math.sin(dp/2)**2 + Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// ── Captura ───────────────────────────────────────────────────────────────────
+async function capturar() {
+  if (!selectedLoc || !userLat) return;
+  const btn = document.getElementById('btn-capturar');
+  btn.disabled = true; btn.textContent = 'CAPTURANDO...';
+
+  try {
+    const res  = await fetch(`${API}/capturar/${selectedLoc.id}/`, {
+      method:'POST',
+      headers:{ Authorization:`Token ${TOKEN}`, 'Content-Type':'application/json' },
+      body: JSON.stringify({ lat:userLat, lon:userLon }),
+    });
+    const data = await res.json();
+
+    if (res.status === 201) {
+      selectedLoc.ya_capturado = true;
+      totalCapturado++;
+      actualizarHeaderProgreso();
+      document.getElementById('header-puntos').textContent = `⭐ ${data.puntos_total} pts`;
+      mostrarModalCaptura(data);
+      // Actualizar el marcador a "capturado" sin recargar todo
+      actualizarMarcadorCapturado(selectedLoc.id);
+      actualizarProximidad();
+    } else {
+      showToast(data.error || 'Error al capturar', 'error');
+      btn.disabled = false; btn.textContent = '¡CAPTURAR! 🎯';
+    }
+  } catch {
+    showToast('Error de conexión', 'error');
+    btn.disabled = false; btn.textContent = '¡CAPTURAR! 🎯';
+  }
+}
+
+function actualizarMarcadorCapturado(locationId) {
+  const loc = locations.find(l => l.id === locationId);
+  if (!loc) return;
+  loc.ya_capturado = true;
+
+  // Redibujar solo ese marcador
+  if (markers[locationId]) markers[locationId].remove();
+  const p    = loc.pokemon;
+  const html = `
+    <div class="poke-marker capturado ${p.is_shiny ? 'shiny' : ''}" style="position:relative">
+      <img src="${p.imagen}" style="width:36px;height:36px;object-fit:contain"/>
+      <div style="position:absolute;top:-5px;right:-5px;width:16px;height:16px;border-radius:50%;background:#22c55e;color:#fff;font-size:9px;font-weight:900;display:flex;align-items:center;justify-content:center">✓</div>
+    </div>`;
+  const icon   = L.divIcon({ className:'', html, iconSize:[52,52], iconAnchor:[26,26] });
+  const marker = L.marker([loc.lat, loc.lon], { icon, zIndexOffset:0 }).addTo(map);
+  marker.on('click', (e) => { L.DomEvent.stopPropagation(e); seleccionar(loc); });
+  markers[locationId] = marker;
+}
+
+// ── Modal captura ─────────────────────────────────────────────────────────────
+function mostrarModalCaptura(data) {
+  const p = data.pokemon;
+  const tipos = p.tipos.map(t =>
+    `<span class="tipo-${t} text-xs font-bold px-2 py-0.5 rounded-full capitalize">${t}</span>`
+  ).join('');
+  const stats = Object.entries(p.stats).map(([k,v]) => {
+    const pct   = Math.min(100, Math.round(v/255*100));
+    const color = STAT_COLORS[k] || '#94a3b8';
+    return `<div class="flex items-center gap-2">
+      <span class="text-white/40 text-xs font-bold w-8 shrink-0">${STAT_LABELS[k]}</span>
+      <span class="text-white text-xs font-bold w-6 text-right">${v}</span>
+      <div class="stat-bar flex-1"><div class="stat-fill" style="width:${pct}%;background:${color}"></div></div>
+    </div>`;
+  }).join('');
+
+  const rareza_color = { comun:'#94a3b8', raro:'#60a5fa', epico:'#c084fc', legendario:'#facc15' };
+
+  document.getElementById('modal-content').innerHTML = `
+    <div class="mb-3">
+      ${p.is_shiny ? '<div class="shiny-badge inline-block text-black text-xs font-black px-3 py-1 rounded-full mb-2">✨ SHINY</div>' : ''}
+      <div class="text-4xl mb-1">🎉</div>
+      <p class="text-white/40 text-xs uppercase tracking-widest">¡Pokémon capturado!</p>
+    </div>
+    <img src="${p.imagen}" class="w-28 h-28 object-contain mx-auto my-1 drop-shadow-2xl"/>
+    <h2 class="text-xl font-black text-white capitalize tracking-widest mb-0.5">${p.nombre}</h2>
+    <p class="text-xs font-bold mb-1" style="color:${rareza_color[p.rareza]}">${p.rareza.toUpperCase()}</p>
+    <p class="text-white/30 text-xs mb-3">📍 ${data.lugar}</p>
+    <div class="flex gap-1 justify-center mb-4">${tipos}</div>
+    <div class="space-y-1.5 mb-4 text-left">${stats}</div>
+    <div class="bg-yellow-500/10 border border-yellow-500/20 rounded-xl py-3 mb-2">
+      <p class="text-yellow-400 font-black text-xl">+${data.puntos_ganados} pts</p>
+      <p class="text-white/40 text-xs">Total: ${data.puntos_total} · Nivel ${data.nivel}</p>
+    </div>
+    ${data.total_capturas_punto > 1 ? `<p class="text-white/20 text-xs mb-3">Este punto lo han capturado ${data.total_capturas_punto} entrenadores</p>` : ''}
+    <button onclick="closeModal()" class="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-white font-bold text-sm">CONTINUAR</button>
+  `;
+  document.getElementById('modal').classList.remove('hidden');
+}
+
+function closeModal(e) {
+  if (e && e.target !== document.getElementById('modal')) return;
+  document.getElementById('modal').classList.add('hidden');
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+let toastTimeout;
+function showToast(msg, type='info') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className   = type;
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => el.classList.add('hidden'), 3500);
+}
+
+// ── Logout ────────────────────────────────────────────────────────────────────
+async function doLogout() {
+  try { await fetch(`${API}/auth/logout/`, { method:'POST', headers:{ Authorization:`Token ${TOKEN}` } }); } catch {}
+  localStorage.clear();
+  window.location.href = 'index.html';
+}
+
+// ── Perfil ────────────────────────────────────────────────────────────────────
+async function cargarPerfil() {
+  try {
+    const res  = await fetch(`${API}/perfil/`, { headers:{ Authorization:`Token ${TOKEN}` } });
+    const data = await res.json();
+    document.getElementById('header-puntos').textContent = `⭐ ${data.puntos} pts · Nv.${data.nivel}`;
+  } catch {}
+}
+
+// ── Arranque ──────────────────────────────────────────────────────────────────
+cargarPerfil();
+startGPS();
+setTimeout(() => { if (locations.length === 0) cargarUbicaciones(); }, 5000);
+setInterval(cargarUbicaciones, 60_000);  // Refrescar cada minuto
+</script>
+</body>
+</html>
+
+
